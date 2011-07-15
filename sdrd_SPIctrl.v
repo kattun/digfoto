@@ -8,8 +8,10 @@ module sdrd_SPIctrl
   input                 DO,
   output                SPI_BUSY,
   output                SPI_INIT,
-  output [31:0]         SPIOUT_FATPRM,
-  output [2:0]          SPIOUT_SIZE,
+  output reg [511:0]    SPIOUT_FATPRM,
+  output reg [8:0]      SPIOUT_SIZE,
+  output reg            SPIOUT_RGBWR,
+  output reg [511:0]    SPIOUT_RGBDATA,
   output reg            CS,
   output reg            DI,
   output                GND1,
@@ -22,6 +24,10 @@ module sdrd_SPIctrl
 //---------------------------------------------------------------
 //prm, reg, wire
 //---------------------------------------------------------------
+// data type
+parameter FAT32         = 2'd1;
+parameter RGB           = 2'd2;
+
 // state machine
 parameter INIT_CS       = 5'd0;
 parameter INIT_CMD0     = 5'd1;
@@ -43,10 +49,10 @@ parameter STOP     = 1'b1;
 
 // R1 length for count
 parameter CMD_R1_LEN    = 6'd48;
-parameter RES_R1_LEN    = 6'd8;
+parameter RES_R1_LEN    = 7'd8;
 parameter NORES_MAX     = 7'd80;
 parameter HEAD_LEN      = 9'd8;
-parameter DATA_LEN      = 9'd512;
+parameter DATA_LEN      = 10'd512;
 parameter CRC_LEN       = 9'd16;
 
 // state machine
@@ -97,10 +103,47 @@ reg                     reg_valid_count_CRC;
 wire                    wire_valid_count_CRC;
 
 /* input data reg */
+reg     [31:0]          addr;
+reg     [31:0]          size;
+reg     [31:0]          count_size;
 reg     [1:0]           dataType;
+wire                    finish_allDataRead;
+
 reg     [7:0]           do_RES;
-reg     [255:0]         do_data;
+reg     [511:0]         do_data;
 reg     [15:0]          do_CRC;
+
+
+//---------------------------------------------------------------
+//input保持
+//---------------------------------------------------------------
+// by fat32ctrl
+always @ (posedge CLK or negedge RST_X) begin
+        if( !RST_X )
+                addr     <= 32'b0;
+                size     <= 32'b0;
+                dataType <= 2'b0;
+        else if( SPIN_DATATYPE != 2'b0 )
+                addr     <= SPIN_ACCESS_ADR;
+                size     <= SPIN_ACCESS_SIZE;
+                dataType <= SPIN_DATATYPE;
+end
+
+// data communication count
+always @ (posedge CLK or negedge RST_X) begin
+        if( !RST_X )
+                count_size <= 32'b0;
+        else if( dataType == 2'b0 )
+                count_size <= 32'b0;
+        else if( current == IDLE )
+                count_size <= 32'b0;
+        else if( valid_count_data )
+                count_size <= count_size + 32'b1;
+end
+
+assign finish_allDataRead = (count_size >= size) ? 1'b1 : 1'b0;
+
+
 //---------------------------------------------------------------
 //ステートマシン
 //---------------------------------------------------------------
@@ -170,8 +213,10 @@ always @* begin
                 READ_TOKEN: begin
                         if( noRES_CMD17 )
                                 next <= READ_CMD17;
-                        else if( finish_READ_TOKEN )
+                        else if( finish_READ_TOKEN && finish_allDataRead )
                                 next <= IDLE;
+                        else if( finish_READ_TOKEN && !finish_allDataRead )
+                                next <= READ_CMD17;
                         else if( err )
                                 next <= INIT;
                         else
@@ -195,15 +240,6 @@ end
 
 assign finish_init_CS = (count_CS == CS_H_COUNT);
 
-// CS
-always @ (posedge CLK or negedge RST_X) begin
-        if( !RST_X )
-                CS <= 1'b0;
-        else if(current == INIT_CS)
-                CS <= 1'b1;
-        else
-                CS <= 1'b0;
-end
 
 //---------------------------------------------------------------
 // CMD生成
@@ -229,21 +265,6 @@ assign finish_init_CMD0 = finish_CMD & (current == INIT_CMD0);
 // finish_init_CMD1
 assign finish_init_CMD1 = finish_CMD & (current == INIT_CMD1);
 
-// DI
-always @ (posedge CLK or negedge RST_X) begin
-        if( !RST_X )
-                DI <= 1'b0;
-        else if( !valid_count_CMD )
-                DI <= 1'b0;
-        else begin
-                case(current)
-                        INIT_CMD0  : DI <= CMD(6'd0, 32'b0)[count_CMD];
-                        INIT_CMD1  : DI <= CMD(6'd1, 32'b0)[count_CMD];
-                        READ_CMD17 : DI <= CMD(6'd17, SPIN_ACCESS_ADR)[count_CMD];
-                        default    : DI <= 1'b0;
-                endcase
-        end
-end
 
 //---------------------------------------------------------------
 // CMD作成関数
@@ -299,11 +320,11 @@ assign finish_RES00 = finish_RES & (current == INIT_RES00);
 //do_RES(Data Out RESponse)
 always @ (posedge CLK or negedge RST_X) begin
         if( !RST_X )
-                do_RES <= 7'b0;
+                do_RES <= 8'b0;
         else if( valid_count_RES )
                 do_RES[count_RES] <= DO;
         else
-                do_RES  <= 7'b0;
+                do_RES  <= 8'b0;
 end
 
 
@@ -346,6 +367,8 @@ always @ (posedge CLK or negedge RST_X) begin
                 reg_valid_count_data <= 1'b1;
         else if( count_data == DATA_LEN-1)
                 reg_valid_count_data <= 1'b0;
+        else if( count_size == size - 1)
+                reg_valid_count_data <= 1'b0;
 end
 
 //valid_count_data
@@ -355,7 +378,7 @@ assign valid_count_data = reg_valid_count_data | wire_valid_count_data;
 always @ (posedge CLK or negedge RST_X) begin
         if( !RST_X )
                 count_data <= 9'b0;
-        else if(count_data == DATA_LEN - 1)
+        else if( count_data == DATA_LEN-1 )
                 count_data <= 9'b0;
         else if( valid_count_data )
                 count_data <= count_data + 9'b1;
@@ -404,15 +427,87 @@ assign finish_READ_TOKEN = (count_CRC == CRC_LEN - 1);
 //---------------------------------------------------------------
 //出力
 //---------------------------------------------------------------
+/* to FAT32_ctrl */
+assign SPI_BUSY = !(current == IDLE);
+assign SPI_INIT = (current == INIT_CS);
+
+// SPIOUT_FATPRM
+always @ (posedge CLK or negedge RST_X) begin
+        if( !RST_X )
+                SPIOUT_FATPRM <= 512'b0;
+        else if((dataType == FAT32) && (count_data == DATA_LEN-1))
+                SPIOUT_FATPRM <= do_data;
+        else
+                SPIOUT_FATPRM <= 512'b0;
+end
+
+// SPIOUT_SIZE
+always @ (posedge CLK or negedge RST_X) begin
+        if( !RST_X )
+                SPIOUT_SIZE <= 32'b0;
+        else if( !(dataType == FAT32) )
+                SPIOUT_SIZE <= 32'b0;
+        else if( (count_data == DATA_LEN-1) && (size =< count_size-1) )
+                SPIOUT_SIZE <= size & 32'h0000_0200;
+        else if( (count_data == DATA_LEN-1) && (size > count_size-1) )
+                SPIOUT_SIZE <= DATA_LEN;
+        else
+                SPIOUT_SIZE <= 32'b0;
+end
+
+// SPIOUT_RGBWR
+always @ (posedge CLK or negedge RST_X) begin
+        if( !RST_X )
+                SPIOUT_RGBWR <= 512'b0;
+        else if((dataType == RGB) && (count_data == DATA_LEN-1))
+                SPIOUT_RGBWR <= 1'b1;
+        else
+                SPIOUT_RGBWR <= 512'b0;
+end
+
+// SPIOUT_RGBDATA
+always @ (posedge CLK or negedge RST_X) begin
+        if( !RST_X )
+                SPIOUT_RGBDATA <= 511'b0;
+        else if((dataType == RGB) && (count_data == DATA_LEN-1))
+                SPIOUT_RGBDATA <= do_data;
+        else
+                SPIOUT_RGBDATA <= 32'b0;
+end
+
+/* to SD card */
+// CS
+always @ (posedge CLK or negedge RST_X) begin
+        if( !RST_X )
+                CS <= 1'b0;
+        else if(current == INIT_CS)
+                CS <= 1'b1;
+        else
+                CS <= 1'b0;
+end
+
+// DI
+always @ (posedge CLK or negedge RST_X) begin
+        if( !RST_X )
+                DI <= 1'b0;
+        else if( !valid_count_CMD )
+                DI <= 1'b0;
+        else begin
+                case(current)
+                        INIT_CMD0  : DI <= CMD(6'd0, 32'b0)[count_CMD];
+                        INIT_CMD1  : DI <= CMD(6'd1, 32'b0)[count_CMD];
+                        READ_CMD17 : DI <= CMD(6'd17, addr)[count_CMD];
+                        default    : DI <= 1'b0;
+                endcase
+        end
+end
+
+
 /* 固定信号線 */
 assign SCLK = CLK;
 assign VCC  = 1'b1;
 assign GND1 = 1'b0;
 assign GND2 = 1'b0;
 
-
-/* to FAT32_ctrl */
-assign SPI_BUSY = !(current == IDLE);
-assign SPI_INIT = (current == INIT_CS);
 
 endmodule
