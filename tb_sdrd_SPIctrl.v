@@ -77,6 +77,6 @@ initial begin
   r_spin_access_adr  = 32'h00;
   r_spin_access_size = 32'd512; // 512 byte
   r_spin_datatype    = 2'd2;
-
+end
 
 endmodule

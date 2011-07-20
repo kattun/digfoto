@@ -115,6 +115,10 @@ reg     [1:0]           dataType;
 reg     [7:0]           do_RES;
 reg     [15:0]          do_CRC;
 
+/* cmd wire */
+wire    [47:0]				wire_CMD0;
+wire	  [47:0]				wire_CMD1;
+wire	  [47:0]				wire_CMD17;
 /* for fifo */
 // fat32
 wire                    do_fat_fifo_din   ;
@@ -139,12 +143,14 @@ wire   [63:0]           do_dsp_fifo_dout  ;
 //---------------------------------------------------------------
 // by fat32ctrl
 always @ (posedge CLK or negedge RST_X) begin
-        if( !RST_X )
+        if( !RST_X ) begin
                 addr     <= 32'b0;
                 dataType <= 2'b0;
-        else if( SPIN_DATATYPE != 2'b0 )
+		  end
+        else if( SPIN_DATATYPE != 2'b0 ) begin
                 addr     <= SPIN_ACCESS_ADR;
                 dataType <= SPIN_DATATYPE;
+					 end
 end
 
 /* buffer fifo */
@@ -185,7 +191,7 @@ fifo_fwft_1in64out_128depth do_dsp_fifo
 
 
 //---------------------------------------------------------------
-//ステートマシン
+//ス�ト�シン
 //---------------------------------------------------------------
 always @ (posedge CLK or negedge RST_X) begin
         if( !RST_X )
@@ -280,7 +286,7 @@ assign finish_CS = (count_CS == CS_H_COUNT);
 
 
 //---------------------------------------------------------------
-// CMD生成
+// CMD生�
 //---------------------------------------------------------------
 // valid_count_CMD
 assign valid_count_CMD = (current == INIT_CMD0) | (current == INIT_CMD1) | (current == READ_CMD17);
@@ -305,7 +311,7 @@ assign finish_CMD1 = finish_CMD & (current == INIT_CMD1);
 
 
 //---------------------------------------------------------------
-// CMD作成関数
+// CMD作�関数
 //---------------------------------------------------------------
 function [47:0] CMD;
         input [5:0]     CMD_NUM;
@@ -320,7 +326,7 @@ function [47:0] CMD;
 endfunction
 
 //---------------------------------------------------------------
-// RES作成
+// RES作�
 //---------------------------------------------------------------
 /* RES */
 // wire_valid_count_RES
@@ -469,8 +475,7 @@ assign finish_READ_TOKEN = finish_count_CRC;
 
 
 //---------------------------------------------------------------
-//出力
-//---------------------------------------------------------------
+//出�//---------------------------------------------------------------
 /* to FAT32_ctrl */
 assign SPI_BUSY = !(current == IDLE);
 assign SPI_INIT = (current == INIT_CS);
@@ -494,6 +499,10 @@ always @ (posedge CLK or negedge RST_X) begin
 end
 
 // DI
+assign wire_CMD0 = CMD(6'd0, 32'd0);
+assign wire_CMD1 = CMD(6'd1, 32'd0);
+assign wire_CMD0 = CMD(6'd17, addr);
+
 always @ (posedge CLK or negedge RST_X) begin
         if( !RST_X )
                 DI <= 1'b0;
@@ -501,16 +510,16 @@ always @ (posedge CLK or negedge RST_X) begin
                 DI <= 1'b0;
         else begin
                 case(current)
-                        INIT_CMD0  : DI <= CMD(6'd0, 32'b0)[count_CMD];
-                        INIT_CMD1  : DI <= CMD(6'd1, 32'b0)[count_CMD];
-                        READ_CMD17 : DI <= CMD(6'd17, addr)[count_CMD];
+                        INIT_CMD0  : DI <= wire_CMD0[count_CMD];
+                        INIT_CMD1  : DI <= wire_CMD1[count_CMD];
+                        READ_CMD17 : DI <= wire_CMD17[count_CMD];
                         default    : DI <= 1'b0;
                 endcase
         end
 end
 
 
-/* 固定信号線 */
+/* 固定信号�*/
 assign SCLK = CLK;
 assign VCC  = 1'b1;
 assign GND1 = 1'b0;
