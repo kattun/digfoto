@@ -30,9 +30,9 @@ parameter RGB           = 2'd2;
 // state machine
 parameter INIT_CS       = 5'd0;
 parameter INIT_CMD0     = 5'd1;
-parameter INIT_RES01    = 5'd2;
+parameter INIT_RES0    = 5'd2;
 parameter INIT_CMD1     = 5'd3;
-parameter INIT_RES00    = 5'd4;
+parameter INIT_RES1    = 5'd4;
 parameter IDLE          = 5'd5;
 parameter READ_CMD17    = 5'd6;
 parameter READ_TOKEN    = 5'd7;
@@ -204,11 +204,11 @@ always @* begin
                 end
                 INIT_CMD0: begin
                         if( finish_CMD0 )
-                                next <= INIT_RES01;
+                                next <= INIT_RES0;
                         else
                                 next <= INIT_CMD0;
                 end
-                INIT_RES01: begin
+                INIT_RES0: begin
                         if( noRES_CMD0 )
                                 next <= INIT_CS;
                         else if( finish_RES0 )
@@ -216,15 +216,15 @@ always @* begin
                         else if( err )
                                 next <= INIT_CS;
                         else
-                                next <= INIT_RES01;
+                                next <= INIT_RES0;
                 end
                 INIT_CMD1: begin
                         if( finish_CMD1 )
-                                next <= INIT_RES00;
+                                next <= INIT_RES1;
                         else
                                 next <= INIT_CMD1;
                 end
-                INIT_RES00: begin
+                INIT_RES1: begin
                         if( noRES_CMD1 )
                                 next <= INIT_CMD1;
                         else if( finish_RES1 )
@@ -232,7 +232,7 @@ always @* begin
                         else if( err )
                                 next <= INIT_CS;
                         else
-                                next <= INIT_RES00;
+                                next <= INIT_RES1;
                 end
                 IDLE: begin
                         if( dataType != 2'b0 )
@@ -246,7 +246,7 @@ always @* begin
                         if( finish_CMD17 )
                                 next <= READ_TOKEN;
                         else if( err )
-                                next <= INIT;
+                                next <= INIT_CS;
                         else
                                 next <= READ_CMD17;
                 end
@@ -256,7 +256,7 @@ always @* begin
                         else if( finish_READ_TOKEN )
                                 next <= IDLE;
                         else if( err )
-                                next <= INIT;
+                                next <= INIT_CS;
                         else
                                 next <= READ_TOKEN;
                 end
@@ -324,7 +324,7 @@ endfunction
 //---------------------------------------------------------------
 /* RES */
 // wire_valid_count_RES
-assign wire_valid_count_RES = ((current == INIT_RES01) | (current == INIT_RES00) | (current == READ_TOKEN)) & (DO == 1'b0);
+assign wire_valid_count_RES = ((current == INIT_RES0) | (current == INIT_RES1) | (current == READ_TOKEN)) & (DO == 1'b0);
 
 // reg_valid_count_RES
 always @ (posedge CLK or negedge RST_X) begin
@@ -351,9 +351,9 @@ end
 // finish_RES
 assign finish_RES = (count_RES == RES_R1_LEN - 1);
 // finish_RES0
-assign finish_RES0 = finish_RES & (current == INIT_RES01);
+assign finish_RES0 = finish_RES & (current == INIT_RES0);
 // finish_RES1
-assign finish_RES1 = finish_RES & (current == INIT_RES00);
+assign finish_RES1 = finish_RES & (current == INIT_RES1);
 // finish_RES17
 assign finish_RES17 = finish_RES & (current == READ_TOKEN);
 // finish_RES17_reg_for_valid_data
@@ -380,8 +380,8 @@ end
 /*no RES */
 // valid_count_noRES
 assign valid_count_noRES = (
-                  (current == INIT_RES01) 
-                | (current == INIT_RES00)
+                  (current == INIT_RES0) 
+                | (current == INIT_RES1)
                 | (current == READ_TOKEN)
                 )
                 & (!valid_count_RES);
@@ -401,8 +401,8 @@ end
 
 //noRES
 assign noRES = (count_noRES == NORES_MAX) & valid_count_RES;
-assign noRES_CMD0 = noRES & (current == INIT_RES01);
-assign noRES_CMD1 = noRES & (current == INIT_RES00);
+assign noRES_CMD0 = noRES & (current == INIT_RES0);
+assign noRES_CMD1 = noRES & (current == INIT_RES1);
 assign noRES_CMD17 = noRES & (current == READ_TOKEN);
 
 
