@@ -5,7 +5,7 @@ module sdrd_top
 	input           SD_DO_7,
 
         output          WR,
-        output [511:0]  DATA,
+        output [63:0]  DATA,
 	output          SD_CS_1,
 	output          SD_DI_2,
 	output          SD_GND_3,
@@ -20,22 +20,21 @@ wire [1:0]      dataType_fat32_spi;
 
 wire            busy_spi_fat32;
 wire            init_spi_fat32;
-wire [511:0]    data_spi_fat32;
-wire [8:0]      size_spi_fat32;
+wire [255:0]    data_spi_fat32;
+wire            valid_spi_fat32;
 
 module sdrd_SPIctrl spi
 (
         .CLK                    (CLK),
         .RST_X                  (RST_X),
         .SPIN_ACCESS_ADR        (addr_fat32_spi),
-        .SPIN_ACCESS_SIZE       (size_fat32_spi),
         .SPIN_DATATYPE          (dataType_fat32_spi),
         .DO                     (SD_DO_7 ),
 
         .SPI_BUSY               (busy_spi_fat32),
         .SPI_INIT               (init_spi_fat32),
         .SPIOUT_FATPRM          (data_spi_fat32),
-        .SPIOUT_SIZE            (size_spi_fat32),
+        .SPIOUT_FAT_VALID       (valid_spi_fat32),
         .SPIOUT_RGBWR           (WR),
         .SPIOUT_RGBDATA         (DATA),
         .CS                     (SD_CS_1 ),
