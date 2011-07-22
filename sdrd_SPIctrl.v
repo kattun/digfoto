@@ -30,9 +30,9 @@ parameter RGB           = 2'd2;
 // state machine
 parameter INIT_CS       = 5'd0;
 parameter INIT_CMD0     = 5'd1;
-parameter INIT_RES0    = 5'd2;
+parameter INIT_RES0     = 5'd2;
 parameter INIT_CMD1     = 5'd3;
-parameter INIT_RES1    = 5'd4;
+parameter INIT_RES1     = 5'd4;
 parameter IDLE          = 5'd5;
 parameter READ_CMD17    = 5'd6;
 parameter READ_TOKEN    = 5'd7;
@@ -41,10 +41,10 @@ parameter READ_TOKEN    = 5'd7;
 parameter CS_H_COUNT    = 80;
 
 // CMD make func
-parameter START    = 2'b01;
-parameter CRC      = 7'b1001010;
-parameter UN_CRC   = 7'b0;
-parameter STOP     = 1'b1;
+parameter START         = 2'b01;
+parameter CRC           = 7'b1001010;
+parameter UN_CRC        = 7'b0;
+parameter STOP          = 1'b1;
 
 // R1 length for count
 parameter CMD_R1_LEN    = 6'd48;
@@ -53,6 +53,10 @@ parameter NORES_MAX     = 7'd80;
 parameter HEAD_LEN      = 9'd8;
 parameter DATA_LEN      = 13'd4096;
 parameter CRC_LEN       = 9'd16;
+
+// buffering size
+parameter BUF_FAT32_LEN = 9'd256;
+parameter BUF_RGB_LEN   = 7'd64;
 
 // state machine
 reg     [4:0]           current, next;
@@ -84,7 +88,7 @@ wire                    noRES;
 
 
 // ERROR
-wire                    err;    // 取り外し
+wire                    err;    // for remove, fatal error
 
 /* counter */
 reg     [6:0]           count_CS;
@@ -115,10 +119,20 @@ reg     [1:0]           dataType;
 reg     [7:0]           do_RES;
 reg     [15:0]          do_CRC;
 
+wire                    valid_buffer_FAT;
+wire                    valid_buffer_RGB;
+wire                    finish_buffer_FAT;
+wire                    finish_buffer_RGB;
+reg     [8:0]           count_buffer_FAT;
+reg     [6:0]           count_buffer_RGB;
+reg     [255:0]         buffer_FAT;
+reg     [63:0]          buffer_RGB;
+
 /* cmd wire */
-wire    [47:0]				wire_CMD0;
-wire	  [47:0]				wire_CMD1;
-wire	  [47:0]				wire_CMD17;
+wire    [47:0]          wire_CMD0;
+wire	  [47:0]        wire_CMD1;
+wire	  [47:0]        wire_CMD17;
+
 /* for fifo */
 // fat32
 wire                    do_fat_fifo_din   ;
@@ -139,26 +153,82 @@ wire                    do_dsp_fifo_valid ;
 wire   [63:0]           do_dsp_fifo_dout  ;
 
 //---------------------------------------------------------------
-//input保持
+//keep input
 //---------------------------------------------------------------
 // by fat32ctrl
 always @ (posedge CLK or negedge RST_X) begin
         if( !RST_X ) begin
                 addr     <= 32'b0;
                 dataType <= 2'b0;
-		  end
+        end
         else if( SPIN_DATATYPE != 2'b0 ) begin
                 addr     <= SPIN_ACCESS_ADR;
                 dataType <= SPIN_DATATYPE;
-					 end
+        end
 end
 
-/* buffer fifo */
+/* buffer */
 //fat32 data
-assign do_fat_fifo_wr           = valid_do_data & (dataType == 2'b01);
-assign do_fat_fifo_din          = DO;
+//valid
+assign valid_buffer_FAT = valid_do_data & (dataType == 2'b01);
+
+//count
+always @ (posedge CLK or negedge RST_X) begin
+        if( !RST_X )
+                count_buffer_FAT <= 9'b0;
+        else if( finish_buffer_FAT )
+                count_buffer_FAT <= 9'b0;
+        else if( valid_buffer_FAT )
+                count_buffer_FAT <= count_buffer_FAT + 9'b1;
+end
+
+//finish
+assign finish_buffer_FAT = (count_buffer_FAT == BUF_FAT32_LEN - 1);
+
+// buffer
+always @ (posedge CLK or negedge RST_X) begin
+        if( !RST_X )
+                buffer_FAT <= 256'b0;
+        else if( finish_buffer_FAT )
+                buffer_FAT <= 256'b0;
+        else if( valid_buffer_FAT )
+                buffer_FAT[count_buffer_FAT] <= DO;
+end
+
+//dsp data
+//valid
+assign valid_buffer_RGB = valid_do_data & (dataType == 2'b10);
+
+//count
+always @ (posedge CLK or negedge RST_X) begin
+        if( !RST_X )
+                count_buffer_RGB <= 7'b0;
+        else if( finish_buffer_FAT )
+                count_buffer_RGB <= 7'b0;
+        else if( valid_buffer_FAT )
+                count_buffer_RGB <= count_buffer_RGB + 7'b1;
+end
+
+//finish
+assign finish_buffer_RGB (count_buffer_RGB= BUF_RGB_LEN - 1);
+
+// buffer
+always @ (posedge CLK or negedge RST_X) begin
+        if( !RST_X )
+                buffer_RGB <= 64'b0;
+        else if( finish_buffer_RGB )
+                buffer_RGB <= 64'b0;
+        else if( valid_buffer_RGB )
+                buffer_RGB[count_buffer_RGB] <= DO;
+end
+
+
+/* fifo */
+//fat32 data
+assign do_fat_fifo_wr           = valid_buffer_FAT;
+assign do_fat_fifo_din          = buffer_FAT
 assign do_fat_fifo_rd           = !do_fat_fifo_empty;
-fifo_fwft_1in256out_128depth do_fat_fifo
+fifo_fwft_256in256out_128depth do_fat_fifo
 (
         .clk            (CLK                    ),
         .rst            (!RST_X                 ),
@@ -173,10 +243,10 @@ fifo_fwft_1in256out_128depth do_fat_fifo
 
 
 //dsp data
-assign do_dsp_fifo_wr           = valid_do_data & (dataType == 2'b10);
-assign do_dsp_fifo_din          = DO;
+assign do_dsp_fifo_wr           = valid_buffer_RGB;
+assign do_dsp_fifo_din          = buffer_RGB;
 assign do_dsp_fifo_rd           = !do_dsp_fifo_empty;
-fifo_fwft_1in64out_128depth do_dsp_fifo
+fifo_fwft_64in64out_128depth do_dsp_fifo
 (
         .clk            (CLK                    ),
         .rst            (!RST_X                 ),
@@ -191,7 +261,7 @@ fifo_fwft_1in64out_128depth do_dsp_fifo
 
 
 //---------------------------------------------------------------
-//ス�ト�シン
+// state machine
 //---------------------------------------------------------------
 always @ (posedge CLK or negedge RST_X) begin
         if( !RST_X )
@@ -286,7 +356,7 @@ assign finish_CS = (count_CS == CS_H_COUNT);
 
 
 //---------------------------------------------------------------
-// CMD生�
+// CMD
 //---------------------------------------------------------------
 // valid_count_CMD
 assign valid_count_CMD = (current == INIT_CMD0) | (current == INIT_CMD1) | (current == READ_CMD17);
@@ -311,7 +381,7 @@ assign finish_CMD1 = finish_CMD & (current == INIT_CMD1);
 
 
 //---------------------------------------------------------------
-// CMD作�関数
+// CMD function
 //---------------------------------------------------------------
 function [47:0] CMD;
         input [5:0]     CMD_NUM;
@@ -326,7 +396,7 @@ function [47:0] CMD;
 endfunction
 
 //---------------------------------------------------------------
-// RES作�
+// RES
 //---------------------------------------------------------------
 /* RES */
 // wire_valid_count_RES
@@ -475,7 +545,8 @@ assign finish_READ_TOKEN = finish_count_CRC;
 
 
 //---------------------------------------------------------------
-//出�//---------------------------------------------------------------
+//output
+//---------------------------------------------------------------
 /* to FAT32_ctrl */
 assign SPI_BUSY = !(current == IDLE);
 assign SPI_INIT = (current == INIT_CS);
@@ -519,7 +590,7 @@ always @ (posedge CLK or negedge RST_X) begin
 end
 
 
-/* 固定信号�*/
+/* const value*/
 assign SCLK = CLK;
 assign VCC  = 1'b1;
 assign GND1 = 1'b0;
