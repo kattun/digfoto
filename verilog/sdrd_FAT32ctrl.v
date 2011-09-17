@@ -1,0 +1,170 @@
+module sdrd_FAT32ctrl
+(
+  input             CLK,
+  input             RST_X,
+  input             SPI_BUSY,
+  input             SPI_INIT,
+  input             FAT32BUF_EMPTY,
+  input             PICENTRY_EMPTY,
+  input             PICENTRY_FULL,
+  input   [511:0]    FATIN_PRM,
+  input             FATIN_VALID,
+  output             FAT32BUF_RD,
+  output             RSTS,
+  output             PICENTRY_WR,
+  output   [31:0]    PICENTRY_DATA,
+  output             PICENTRY_RD,
+  output   [31:0]    FATOUT_ACCESS_ADR,
+  output   [1:0]    FATOUT_DATATYPE
+);
+
+
+/* --------------------------------------------------------------- */
+/* prm, reg, wire */
+/* --------------------------------------------------------------- */
+/*  state machine parameter */
+parameter       INIT            =       0;
+parameter       GET_BPB         =       1;
+parameter       SET_BPB         =       2;
+parameter       GET_ROOTDIR     =       3;
+parameter       SET_DIGFOTODIR  =       4;
+parameter       GET_DIGFOTODIR  =       5;
+parameter       SET_FOTO        =       6;
+parameter       GET_DATA        =       7;
+
+/*  state machine */
+reg     [4:0]   current, next;
+
+/*  state control */
+wire            BPB_received;
+wire            BPB_configured;
+wire            rootDir_received;
+wire            DigFotoDir_configured;
+wire            DigFotoDir_received;
+wire            fotoEntry_pushed;
+
+/* --------------------------------------------------------------- */
+/*  input */
+/* --------------------------------------------------------------- */
+/* ---------------------------------------------------------------  */
+/*  state machine                                                   */
+/* ---------------------------------------------------------------  */
+always @ (posedge CLK or negedge RST_X) begin                     
+        if( !RST_X )
+                current <= INIT;
+        else
+                current <= next;
+end
+
+always @* begin
+        case(current)
+                INIT: begin
+                        if( !SPI_INIT )
+                                next <= GET_BPB;
+                        else
+                                next <= INIT;
+                end
+                GET_BPB: begin
+                        if( SPI_INIT )
+                                next <= INIT;
+                        else if( BPB_received )
+                                next <= SET_BPB;
+                        else
+                                next <= GET_BPB;
+                end
+                SET_BPB: begin
+                        if( SPI_INIT )
+                                next <= GEINIT;
+                        else if( BPB_configured )
+                                next <= GET_ROOTDIR;
+                        else
+                                next <= SET_BPB;
+                end
+                GET_ROOTDIR: begin
+                        if( SPI_INIT )
+                                next <= GEINIT;
+                        else if( rootDir_received )
+                                next <= SET_DIGFOTODIR;
+                        else
+                                next <= GET_ROOTDIR;
+                end
+                SET_DIGFOTODIR: begin
+                        if( SPI_INIT )
+                                next <= GEINIT;
+                        else if( DigFotoDir_configured )
+                                next <= GET_DIGFOTODIR;
+                        else
+                                next <= SET_DIGFOTODIR;
+                end
+                GET_DIGFOTODIR: begin
+                        if( SPI_INIT )
+                                next <= GEINIT;
+                        else if( DigFotoDir_received )
+                                next <= SET_FOTO;
+                        else
+                                next <= GET_DIGFOTODIR;
+                end
+                SET_FOTO: begin
+                        if( SPI_INIT )
+                                next <= GEINIT;
+                        else if( fotoEntry_pushed )
+                                next <= GET_DATA;
+                        else
+                                next <= SET_FOTO;
+                end
+
+                // GET_DATAになったら、SDカードが抜かれるまで無限ループ
+                GET_DATA: begin
+                        if( SPI_INIT )
+                                next <= INIT;
+                        else
+                                next <= GET_DATA;
+                end
+        endcase
+end
+
+
+/* --------------------------------------------------------------- */
+/* state machine controller  */
+/* --------------------------------------------------------------- */
+assign BPB_received = (current == GET_BPB) & ~SPI_BUSY;
+assign BPB_configured = ;
+
+assign rootDir_received = (current == GET_ROOTDIR) & ~SPI_BUSY;
+assign DigFotoDir_configured = ;
+assign DigFotoDir_received = (current == GET_DIGFOTODIR) & ~SPI_BUSY;
+assign fotoEntry_pushed = ;
+
+/* --------------------------------------------------------------- */
+/* output */
+/* --------------------------------------------------------------- */
+
+
+/* --------------------------------------------------------------- */
+/* function */
+/* --------------------------------------------------------------- */
+function [] BPBdata_selector;
+        input 
+        input 
+        case()
+                default : ;
+        endcase
+endfunction
+
+function [] digFotoEntry_selector;
+        input 
+        input 
+        case()
+                default : ;
+        endcase
+endfunction
+
+function [] pictureEntry_selector;
+        input 
+        input 
+        case()
+                default : ;
+        endcase
+endfunction
+
+module

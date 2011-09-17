@@ -1,0 +1,75 @@
+------------------------------------------------------------------
+1. sdrd_SPIctrl in-out sign figure
+------------------------------------------------------------------
+  in/out: width :         signal name: sentence 
+------------------------------------------------------------------
+   input:    1  :                 CLK:
+   input:    1  :               RST_X:
+   input:   32  :     SPIN_ACCESS_ADR:
+   input:    2  :       SPIN_DATATYPE:
+   input:    1  :             BUFFULL:
+   input:    1  :                  DO:
+  output:    1  :                BUSY:
+  output:    1  :                INIT:
+  output:    1  :         FAT32BUF_WR:
+  output:  256  :       FAT32BUF_DATA:
+  output:    1  :                  CS:
+  output:    1  :                  DI:
+  output:    1  :                GND1:
+  output:    1  :                 VCC:
+  output:    1  :                SCLK:
+  output:    1  :                GND2:
+  output:    4  :               DEBUG:
+------------------------------------------------------------------
+------------------------------------------------------------------
+2. sdrd_FAT32buf in-out sign figure
+------------------------------------------------------------------
+  in/out: width :         signal name: sentence 
+------------------------------------------------------------------
+   input:    1  :                 CLK:
+   input:    1  :                RSTS:
+   input:    1  :                  WR:
+   input:    1  :                  RD:
+   input:  256  :               INPUT:
+  output:    1  :               EMPTY:
+  output:    1  :                FULL:
+  output:  512  :              OUTPUT:
+  output:    1  :               VALID:
+------------------------------------------------------------------
+------------------------------------------------------------------
+3. sdrd_FAT32ctrl in-out sign figure
+------------------------------------------------------------------
+  in/out: width :         signal name: sentence 
+------------------------------------------------------------------
+   input:    1  :                 CLK:
+   input:    1  :               RST_X:
+   input:    1  :            SPI_BUSY:
+   input:    1  :            SPI_INIT:
+   input:    1  :      FAT32BUF_EMPTY:
+   input:    1  :      PICENTRY_EMPTY:
+   input:    1  :       PICENTRY_FULL:
+   input:  512  :           FATIN_PRM:
+   input:    1  :         FATIN_VALID:
+  output:    1  :         FAT32BUF_RD:
+  output:    1  :                RSTS:
+  output:    1  :         PICENTRY_WR:
+  output:   32  :       PICENTRY_DATA:
+  output:    1  :         PICENTRY_RD:
+  output:   32  :   FATOUT_ACCESS_ADR:
+  output:    2  :     FATOUT_DATATYPE:
+------------------------------------------------------------------
+------------------------------------------------------------------
+4. sdrd_PictureEntryBuf in-out sign figure
+------------------------------------------------------------------
+  in/out: width :         signal name: sentence 
+------------------------------------------------------------------
+   input:    1  :                 CLK:
+   input:    1  :               RST_X:
+   input:    1  :                  WR:
+   input:    1  :                  RD:
+   input:   32  :               INPUT:
+  output:    1  :               EMPTY:
+  output:    1  :                FULL:
+  output:   32  :              OUTPUT:
+  output:    1  :               VALID:
+------------------------------------------------------------------
